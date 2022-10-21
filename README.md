@@ -6,4 +6,6 @@ Lemmy's RTL fork. [Lemmy](https://github.com/LemmyNet/lemmy) is A link aggregato
 
 ----
 
+<img width="1440" alt="scnsh" src="https://user-images.githubusercontent.com/72635080/197231226-063b9121-4d06-4d82-9cd4-95104884a811.png">
+
 🚧 العمل غير مكتمل هنا ، سأقوم بتحديث الصفحة قريباً.
