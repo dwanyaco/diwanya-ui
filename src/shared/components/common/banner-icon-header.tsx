@@ -1,10 +1,9 @@
-import { Option } from "@sniptt/monads";
 import { Component } from "inferno";
 import { PictrsImage } from "./pictrs-image";
 
 interface BannerIconHeaderProps {
-  banner: Option<string>;
-  icon: Option<string>;
+  banner?: string;
+  icon?: string;
 }
 
 export class BannerIconHeader extends Component<BannerIconHeaderProps, any> {
@@ -14,22 +13,18 @@ export class BannerIconHeader extends Component<BannerIconHeaderProps, any> {
 
   render() {
     return (
-      <div className="position-relative mb-2">
-        {this.props.banner.match({
-          some: banner => <PictrsImage src={banner} banner alt="" />,
-          none: <></>,
-        })}
-        {this.props.icon.match({
-          some: icon => (
-            <PictrsImage
-              src={icon}
-              iconOverlay
-              pushup={this.props.banner.isSome()}
-              alt=""
-            />
-          ),
-          none: <></>,
-        })}
+      <div class="position-relative mb-2">
+        {this.props.banner && (
+          <PictrsImage src={this.props.banner} banner alt="" />
+        )}
+        {this.props.icon && (
+          <PictrsImage
+            src={this.props.icon}
+            iconOverlay
+            pushup={!!this.props.banner}
+            alt=""
+          />
+        )}
       </div>
     );
   }

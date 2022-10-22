@@ -1,4 +1,3 @@
-import { Option } from "@sniptt/monads";
 import { Component, linkEvent } from "inferno";
 import { pictrsUri } from "../../env";
 import { i18n } from "../../i18next";
@@ -8,7 +7,7 @@ import { Icon } from "./icon";
 
 interface ImageUploadFormProps {
   uploadTitle: string;
-  imageSrc: Option<string>;
+  imageSrc: string;
   onUpload(url: string): any;
   onRemove(): any;
   rounded?: boolean;
@@ -34,44 +33,39 @@ export class ImageUploadForm extends Component<
 
   render() {
     return (
-      <form className="d-inline">
+      <form class="d-inline">
         <label
           htmlFor={this.id}
-          className="pointer text-muted small font-weight-bold"
+          class="pointer text-muted small font-weight-bold"
         >
-          {this.props.imageSrc.match({
-            some: imageSrc => (
-              <span className="d-inline-block position-relative">
-                <img
-                  src={imageSrc}
-                  height={this.props.rounded ? 60 : ""}
-                  width={this.props.rounded ? 60 : ""}
-                  className={`img-fluid ${
-                    this.props.rounded ? "rounded-circle" : ""
-                  }`}
-                />
-                <a
-                  onClick={linkEvent(this, this.handleRemoveImage)}
-                  aria-label={i18n.t("remove")}
-                >
-                  <Icon icon="x" classes="mini-overlay" />
-                </a>
-              </span>
-            ),
-            none: (
-              <span className="btn btn-secondary">
-                {this.props.uploadTitle}
-              </span>
-            ),
-          })}
+          {!this.props.imageSrc ? (
+            <span class="btn btn-secondary">{this.props.uploadTitle}</span>
+          ) : (
+            <span class="d-inline-block position-relative">
+              <img
+                src={this.props.imageSrc}
+                height={this.props.rounded ? 60 : ""}
+                width={this.props.rounded ? 60 : ""}
+                className={`img-fluid ${
+                  this.props.rounded ? "rounded-circle" : ""
+                }`}
+              />
+              <a
+                onClick={linkEvent(this, this.handleRemoveImage)}
+                aria-label={i18n.t("remove")}
+              >
+                <Icon icon="x" classes="mini-overlay" />
+              </a>
+            </span>
+          )}
         </label>
         <input
           id={this.id}
           type="file"
           accept="image/*,video/*"
           name={this.id}
-          className="d-none"
-          disabled={UserService.Instance.myUserInfo.isNone()}
+          class="d-none"
+          disabled={!UserService.Instance.myUserInfo}
           onChange={linkEvent(this, this.handleImageUpload)}
         />
       </form>
@@ -84,7 +78,8 @@ export class ImageUploadForm extends Component<
     const formData = new FormData();
     formData.append("images[]", file);
 
-    i.setState({ loading: true });
+    i.state.loading = true;
+    i.setState(i.state);
 
     fetch(pictrsUri, {
       method: "POST",
@@ -97,15 +92,18 @@ export class ImageUploadForm extends Component<
         if (res.msg == "ok") {
           let hash = res.files[0].file;
           let url = `${pictrsUri}/${hash}`;
-          i.setState({ loading: false });
+          i.state.loading = false;
+          i.setState(i.state);
           i.props.onUpload(url);
         } else {
-          i.setState({ loading: false });
+          i.state.loading = false;
+          i.setState(i.state);
           toast(JSON.stringify(res), "danger");
         }
       })
       .catch(error => {
-        i.setState({ loading: false });
+        i.state.loading = false;
+        i.setState(i.state);
         console.error(error);
         toast(error, "danger");
       });
@@ -113,7 +111,8 @@ export class ImageUploadForm extends Component<
 
   handleRemoveImage(i: ImageUploadForm, event: any) {
     event.preventDefault();
-    i.setState({ loading: true });
+    i.state.loading = true;
+    i.setState(i.state);
     i.props.onRemove();
   }
 }

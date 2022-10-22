@@ -1,115 +1,95 @@
-import { Either, Left, None, Option, Right, Some } from "@sniptt/monads";
 import { Component } from "inferno";
 import {
+  CommunityView,
   GetCommunity,
   GetCommunityResponse,
-  GetSiteResponse,
   ListCommunities,
   ListCommunitiesResponse,
   ListingType,
   PostView,
+  SiteView,
   SortType,
-  toOption,
   UserOperation,
-  wsJsonToRes,
-  wsUserOp,
 } from "lemmy-js-client";
 import { Subscription } from "rxjs";
 import { InitialFetchRequest, PostFormParams } from "shared/interfaces";
 import { i18n } from "../../i18next";
 import { UserService, WebSocketService } from "../../services";
 import {
-  auth,
-  enableDownvotes,
-  enableNsfw,
+  authField,
   fetchLimit,
   isBrowser,
   setIsoData,
+  setOptionalAuth,
   toast,
   wsClient,
+  wsJsonToRes,
   wsSubscribe,
+  wsUserOp,
 } from "../../utils";
 import { HtmlTags } from "../common/html-tags";
 import { Spinner } from "../common/icon";
 import { PostForm } from "./post-form";
 
 interface CreatePostState {
-  listCommunitiesResponse: Option<ListCommunitiesResponse>;
-  siteRes: GetSiteResponse;
+  site_view: SiteView;
+  communities: CommunityView[];
   loading: boolean;
 }
 
 export class CreatePost extends Component<any, CreatePostState> {
-  private isoData = setIsoData(this.context, ListCommunitiesResponse);
+  private isoData = setIsoData(this.context);
   private subscription: Subscription;
   private emptyState: CreatePostState = {
-    siteRes: this.isoData.site_res,
-    listCommunitiesResponse: None,
+    site_view: this.isoData.site_res.site_view,
+    communities: [],
     loading: true,
   };
 
   constructor(props: any, context: any) {
     super(props, context);
+    this.handlePostCreate = this.handlePostCreate.bind(this);
     this.state = this.emptyState;
 
-    this.handlePostCreate = this.handlePostCreate.bind(this);
-
-    this.parseMessage = this.parseMessage.bind(this);
-    this.subscription = wsSubscribe(this.parseMessage);
-
-    if (UserService.Instance.myUserInfo.isNone() && isBrowser()) {
+    if (!UserService.Instance.myUserInfo && isBrowser()) {
       toast(i18n.t("not_logged_in"), "danger");
       this.context.router.history.push(`/login`);
     }
 
+    this.parseMessage = this.parseMessage.bind(this);
+    this.subscription = wsSubscribe(this.parseMessage);
+
     // Only fetch the data if coming from another route
     if (this.isoData.path == this.context.router.route.match.url) {
-      this.state = {
-        ...this.state,
-        listCommunitiesResponse: Some(
-          this.isoData.routeData[0] as ListCommunitiesResponse
-        ),
-        loading: false,
-      };
+      this.state.communities = this.isoData.routeData[0].communities;
+      this.state.loading = false;
     } else {
       this.refetch();
     }
   }
 
   refetch() {
-    this.params.nameOrId.match({
-      some: opt =>
-        opt.match({
-          left: name => {
-            let form = new GetCommunity({
-              name: Some(name),
-              id: None,
-              auth: auth(false).ok(),
-            });
-            WebSocketService.Instance.send(wsClient.getCommunity(form));
-          },
-          right: id => {
-            let form = new GetCommunity({
-              id: Some(id),
-              name: None,
-              auth: auth(false).ok(),
-            });
-            WebSocketService.Instance.send(wsClient.getCommunity(form));
-          },
-        }),
-      none: () => {
-        let listCommunitiesForm = new ListCommunities({
-          type_: Some(ListingType.All),
-          sort: Some(SortType.TopAll),
-          limit: Some(fetchLimit),
-          page: None,
-          auth: auth(false).ok(),
-        });
-        WebSocketService.Instance.send(
-          wsClient.listCommunities(listCommunitiesForm)
-        );
-      },
-    });
+    if (this.params.community_id) {
+      let form: GetCommunity = {
+        id: this.params.community_id,
+      };
+      WebSocketService.Instance.send(wsClient.getCommunity(form));
+    } else if (this.params.community_name) {
+      let form: GetCommunity = {
+        name: this.params.community_name,
+      };
+      WebSocketService.Instance.send(wsClient.getCommunity(form));
+    } else {
+      let listCommunitiesForm: ListCommunities = {
+        type_: ListingType.All,
+        sort: SortType.TopAll,
+        limit: fetchLimit,
+        auth: authField(false),
+      };
+      WebSocketService.Instance.send(
+        wsClient.listCommunities(listCommunitiesForm)
+      );
+    }
   }
 
   componentWillUnmount() {
@@ -119,45 +99,34 @@ export class CreatePost extends Component<any, CreatePostState> {
   }
 
   get documentTitle(): string {
-    return this.state.siteRes.site_view.match({
-      some: siteView => `${i18n.t("create_post")} - ${siteView.site.name}`,
-      none: "",
-    });
+    return `${i18n.t("create_post")} - ${this.state.site_view.site.name}`;
   }
 
   render() {
     return (
-      <div className="container-lg">
+      <div class="container-lg">
         <HtmlTags
           title={this.documentTitle}
           path={this.context.router.route.match.url}
-          description={None}
-          image={None}
         />
         {this.state.loading ? (
           <h5>
             <Spinner large />
           </h5>
         ) : (
-          this.state.listCommunitiesResponse.match({
-            some: res => (
-              <div className="row">
-                <div className="col-12 col-lg-6 offset-lg-3 mb-4">
-                  <h5>{i18n.t("create_post")}</h5>
-                  <PostForm
-                    post_view={None}
-                    communities={Some(res.communities)}
-                    onCreate={this.handlePostCreate}
-                    params={Some(this.params)}
-                    enableDownvotes={enableDownvotes(this.state.siteRes)}
-                    enableNsfw={enableNsfw(this.state.siteRes)}
-                    allLanguages={this.state.siteRes.all_languages}
-                  />
-                </div>
-              </div>
-            ),
-            none: <></>,
-          })
+          <div class="row">
+            <div class="col-12 col-lg-8 offset-lg-2 mb-4">
+              <h5>{i18n.t("create_post")}</h5>
+              <hr></hr>
+              <PostForm
+                communities={this.state.communities}
+                onCreate={this.handlePostCreate}
+                params={this.params}
+                enableDownvotes={this.state.site_view.site.enable_downvotes}
+                enableNsfw={this.state.site_view.site.enable_nsfw}
+              />
+            </div>
+          </div>
         )}
       </div>
     );
@@ -165,48 +134,36 @@ export class CreatePost extends Component<any, CreatePostState> {
 
   get params(): PostFormParams {
     let urlParams = new URLSearchParams(this.props.location.search);
-    let name = toOption(urlParams.get("community_name")).or(
-      this.prevCommunityName
-    );
-    let id = toOption(urlParams.get("community_id"))
-      .map(Number)
-      .or(this.prevCommunityId);
-    let nameOrId: Option<Either<string, number>>;
-    if (name.isSome()) {
-      nameOrId = Some(Left(name.unwrap()));
-    } else if (id.isSome()) {
-      nameOrId = Some(Right(id.unwrap()));
-    } else {
-      nameOrId = None;
-    }
-
     let params: PostFormParams = {
-      name: toOption(urlParams.get("title")),
-      nameOrId,
-      body: toOption(urlParams.get("body")),
-      url: toOption(urlParams.get("url")),
+      name: urlParams.get("title"),
+      community_name: urlParams.get("community_name") || this.prevCommunityName,
+      community_id: urlParams.get("community_id")
+        ? Number(urlParams.get("community_id")) || this.prevCommunityId
+        : null,
+      body: urlParams.get("body"),
+      url: urlParams.get("url"),
     };
 
     return params;
   }
 
-  get prevCommunityName(): Option<string> {
+  get prevCommunityName(): string {
     if (this.props.match.params.name) {
-      return toOption(this.props.match.params.name);
+      return this.props.match.params.name;
     } else if (this.props.location.state) {
       let lastLocation = this.props.location.state.prevPath;
       if (lastLocation.includes("/c/")) {
-        return toOption(lastLocation.split("/c/")[1]);
+        return lastLocation.split("/c/")[1];
       }
     }
-    return None;
+    return null;
   }
 
-  get prevCommunityId(): Option<number> {
+  get prevCommunityId(): number {
     if (this.props.match.params.id) {
-      return toOption(this.props.match.params.id);
+      return this.props.match.params.id;
     }
-    return None;
+    return null;
   }
 
   handlePostCreate(post_view: PostView) {
@@ -214,13 +171,12 @@ export class CreatePost extends Component<any, CreatePostState> {
   }
 
   static fetchInitialData(req: InitialFetchRequest): Promise<any>[] {
-    let listCommunitiesForm = new ListCommunities({
-      type_: Some(ListingType.All),
-      sort: Some(SortType.TopAll),
-      limit: Some(fetchLimit),
-      page: None,
-      auth: req.auth,
-    });
+    let listCommunitiesForm: ListCommunities = {
+      type_: ListingType.All,
+      sort: SortType.TopAll,
+      limit: fetchLimit,
+    };
+    setOptionalAuth(listCommunitiesForm, req.auth);
     return [req.client.listCommunities(listCommunitiesForm)];
   }
 
@@ -231,19 +187,15 @@ export class CreatePost extends Component<any, CreatePostState> {
       toast(i18n.t(msg.error), "danger");
       return;
     } else if (op == UserOperation.ListCommunities) {
-      let data = wsJsonToRes<ListCommunitiesResponse>(
-        msg,
-        ListCommunitiesResponse
-      );
-      this.setState({ listCommunitiesResponse: Some(data), loading: false });
+      let data = wsJsonToRes<ListCommunitiesResponse>(msg).data;
+      this.state.communities = data.communities;
+      this.state.loading = false;
+      this.setState(this.state);
     } else if (op == UserOperation.GetCommunity) {
-      let data = wsJsonToRes<GetCommunityResponse>(msg, GetCommunityResponse);
-      this.setState({
-        listCommunitiesResponse: Some({
-          communities: [data.community_view],
-        }),
-        loading: false,
-      });
+      let data = wsJsonToRes<GetCommunityResponse>(msg).data;
+      this.state.communities = [data.community_view];
+      this.state.loading = false;
+      this.setState(this.state);
     }
   }
 }

@@ -1,58 +1,52 @@
-import { Either, None, Option, Some } from "@sniptt/monads";
 import { Component } from "inferno";
 import { T } from "inferno-i18next-dess";
 import { Link } from "inferno-router";
 import {
-  CommentNode as CommentNodeI,
   CommentResponse,
   CreateComment,
   EditComment,
-  Language,
   UserOperation,
-  wsJsonToRes,
-  wsUserOp,
 } from "lemmy-js-client";
 import { Subscription } from "rxjs";
 import { i18n } from "../../i18next";
+import { CommentNode as CommentNodeI } from "../../interfaces";
 import { UserService, WebSocketService } from "../../services";
 import {
-  auth,
+  authField,
   capitalizeFirstLetter,
-  myFirstDiscussionLanguageId,
   wsClient,
+  wsJsonToRes,
   wsSubscribe,
+  wsUserOp,
 } from "../../utils";
 import { Icon } from "../common/icon";
 import { MarkdownTextArea } from "../common/markdown-textarea";
 
 interface CommentFormProps {
-  /**
-   * Can either be the parent, or the editable comment. The right side is a postId.
-   */
-  node: Either<CommentNodeI, number>;
+  postId?: number;
+  node?: CommentNodeI; // Can either be the parent, or the editable comment
   edit?: boolean;
   disabled?: boolean;
   focus?: boolean;
   onReplyCancel?(): any;
-  allLanguages: Language[];
 }
 
 interface CommentFormState {
   buttonTitle: string;
   finished: boolean;
-  formId: Option<string>;
+  formId: string;
 }
 
 export class CommentForm extends Component<CommentFormProps, CommentFormState> {
   private subscription: Subscription;
   private emptyState: CommentFormState = {
-    buttonTitle: this.props.node.isRight()
+    buttonTitle: !this.props.node
       ? capitalizeFirstLetter(i18n.t("post"))
       : this.props.edit
       ? capitalizeFirstLetter(i18n.t("save"))
       : capitalizeFirstLetter(i18n.t("reply")),
     finished: false,
-    formId: None,
+    formId: "empty_form",
   };
 
   constructor(props: any, context: any) {
@@ -72,37 +66,26 @@ export class CommentForm extends Component<CommentFormProps, CommentFormState> {
   }
 
   render() {
-    let initialContent = this.props.node.match({
-      left: node =>
-        this.props.edit ? Some(node.comment_view.comment.content) : None,
-      right: () => None,
-    });
-
-    let selectedLang = this.props.node
-      .left()
-      .map(n => n.comment_view.comment.language_id)
-      .or(myFirstDiscussionLanguageId(UserService.Instance.myUserInfo));
-
     return (
-      <div className="mb-3">
-        {UserService.Instance.myUserInfo.isSome() ? (
+      <div class="mb-3">
+        {UserService.Instance.myUserInfo ? (
           <MarkdownTextArea
-            initialContent={initialContent}
-            initialLanguageId={selectedLang}
-            showLanguage
-            buttonTitle={Some(this.state.buttonTitle)}
-            maxLength={None}
+            initialContent={
+              this.props.edit
+                ? this.props.node.comment_view.comment.content
+                : null
+            }
+            buttonTitle={this.state.buttonTitle}
             finished={this.state.finished}
-            replyType={this.props.node.isLeft()}
+            replyType={!!this.props.node}
             focus={this.props.focus}
             disabled={this.props.disabled}
             onSubmit={this.handleCommentSubmit}
             onReplyCancel={this.handleReplyCancel}
-            placeholder={Some(i18n.t("comment_here"))}
-            allLanguages={this.props.allLanguages}
+            placeholder={i18n.t("comment_here")}
           />
         ) : (
-          <div className="alert alert-warning" role="alert">
+          <div class="alert alert-warning" role="alert">
             <Icon icon="alert-triangle" classes="icon-inline mr-2" />
             <T i18nKey="must_login" class="d-inline">
               #
@@ -116,51 +99,30 @@ export class CommentForm extends Component<CommentFormProps, CommentFormState> {
     );
   }
 
-  handleCommentSubmit(msg: {
-    val: Option<string>;
-    formId: string;
-    languageId: Option<number>;
-  }) {
+  handleCommentSubmit(msg: { val: string; formId: string }) {
     let content = msg.val;
-    let language_id = msg.languageId;
-    this.setState({ formId: Some(msg.formId) });
+    this.state.formId = msg.formId;
 
-    this.props.node.match({
-      left: node => {
-        if (this.props.edit) {
-          let form = new EditComment({
-            content,
-            distinguished: None,
-            form_id: this.state.formId,
-            comment_id: node.comment_view.comment.id,
-            language_id,
-            auth: auth().unwrap(),
-          });
-          WebSocketService.Instance.send(wsClient.editComment(form));
-        } else {
-          let form = new CreateComment({
-            content: content.unwrap(),
-            form_id: this.state.formId,
-            post_id: node.comment_view.post.id,
-            parent_id: Some(node.comment_view.comment.id),
-            language_id,
-            auth: auth().unwrap(),
-          });
-          WebSocketService.Instance.send(wsClient.createComment(form));
-        }
-      },
-      right: postId => {
-        let form = new CreateComment({
-          content: content.unwrap(),
-          form_id: this.state.formId,
-          post_id: postId,
-          parent_id: None,
-          language_id,
-          auth: auth().unwrap(),
-        });
-        WebSocketService.Instance.send(wsClient.createComment(form));
-      },
-    });
+    let node = this.props.node;
+
+    if (this.props.edit) {
+      let form: EditComment = {
+        content,
+        form_id: this.state.formId,
+        comment_id: node.comment_view.comment.id,
+        auth: authField(),
+      };
+      WebSocketService.Instance.send(wsClient.editComment(form));
+    } else {
+      let form: CreateComment = {
+        content,
+        form_id: this.state.formId,
+        post_id: node ? node.comment_view.post.id : this.props.postId,
+        parent_id: node ? node.comment_view.comment.id : null,
+        auth: authField(),
+      };
+      WebSocketService.Instance.send(wsClient.createComment(form));
+    }
     this.setState(this.state);
   }
 
@@ -173,15 +135,15 @@ export class CommentForm extends Component<CommentFormProps, CommentFormState> {
     console.log(msg);
 
     // Only do the showing and hiding if logged in
-    if (UserService.Instance.myUserInfo.isSome()) {
+    if (UserService.Instance.myUserInfo) {
       if (
         op == UserOperation.CreateComment ||
         op == UserOperation.EditComment
       ) {
-        let data = wsJsonToRes<CommentResponse>(msg, CommentResponse);
+        let data = wsJsonToRes<CommentResponse>(msg).data;
 
         // This only finishes this form, if the randomly generated form_id matches the one received
-        if (this.state.formId.unwrapOr("") == data.form_id.unwrapOr("")) {
+        if (this.state.formId == data.form_id) {
           this.setState({ finished: true });
 
           // Necessary because it broke tribute for some reason

@@ -1,9 +1,9 @@
-import { None, Option, Some } from "@sniptt/monads";
 import { Component, linkEvent } from "inferno";
 import { Link } from "inferno-router";
 import { PersonViewSafe, Site, SiteAggregates } from "lemmy-js-client";
 import { i18n } from "../../i18next";
-import { amAdmin, mdToHtml, numToSI } from "../../utils";
+import { UserService } from "../../services";
+import { mdToHtml, numToSI } from "../../utils";
 import { BannerIconHeader } from "../common/banner-icon-header";
 import { Icon } from "../common/icon";
 import { PersonListing } from "../person/person-listing";
@@ -12,9 +12,9 @@ import { SiteForm } from "./site-form";
 interface SiteSidebarProps {
   site: Site;
   showLocal: boolean;
-  counts: Option<SiteAggregates>;
-  admins: Option<PersonViewSafe[]>;
-  online: Option<number>;
+  counts?: SiteAggregates;
+  admins?: PersonViewSafe[];
+  online?: number;
 }
 
 interface SiteSidebarState {
@@ -38,24 +38,24 @@ export class SiteSidebar extends Component<SiteSidebarProps, SiteSidebarState> {
   render() {
     let site = this.props.site;
     return (
-      <div className="card border-secondary mb-3">
-        <div className="card-body">
+      <div class="card border-secondary mb-3">
+        <div class="card-body">
           {!this.state.showEdit ? (
             <div>
-              <div className="mb-2">
+              <div class="mb-2">
                 {this.siteName()}
-                {this.props.admins.isSome() && this.adminButtons()}
+                {this.props.admins && this.adminButtons()}
               </div>
               {!this.state.collapsed && (
                 <>
-                  <BannerIconHeader banner={site.banner} icon={None} />
+                  <BannerIconHeader banner={site.banner} />
                   {this.siteInfo()}
                 </>
               )}
             </div>
           ) : (
             <SiteForm
-              site={Some(site)}
+              site={site}
               showLocal={this.props.showLocal}
               onEdit={this.handleEditSite}
               onCancel={this.handleEditCancel}
@@ -69,21 +69,23 @@ export class SiteSidebar extends Component<SiteSidebarProps, SiteSidebarState> {
   siteName() {
     let site = this.props.site;
     return (
-      <h5 className="mb-0 d-inline">
-        {site.name}
-        <button
-          className="btn btn-sm text-muted"
-          onClick={linkEvent(this, this.handleCollapseSidebar)}
-          aria-label={i18n.t("collapse")}
-          data-tippy-content={i18n.t("collapse")}
-        >
-          {this.state.collapsed ? (
-            <Icon icon="plus-square" classes="icon-inline" />
-          ) : (
-            <Icon icon="minus-square" classes="icon-inline" />
-          )}
-        </button>
-      </h5>
+      site.name && (
+        <h5 class="mb-0 d-inline">
+          {site.name}
+          <button
+            class="btn btn-sm text-muted"
+            onClick={linkEvent(this, this.handleCollapseSidebar)}
+            aria-label={i18n.t("collapse")}
+            data-tippy-content={i18n.t("collapse")}
+          >
+            {this.state.collapsed ? (
+              <Icon icon="plus-square" classes="icon-inline" />
+            ) : (
+              <Icon icon="minus-square" classes="icon-inline" />
+            )}
+          </button>
+        </h5>
+      )
     );
   }
 
@@ -91,33 +93,21 @@ export class SiteSidebar extends Component<SiteSidebarProps, SiteSidebarState> {
     let site = this.props.site;
     return (
       <div>
-        {site.description.match({
-          some: description => <h6>{description}</h6>,
-          none: <></>,
-        })}
-        {site.sidebar.match({
-          some: sidebar => this.siteSidebar(sidebar),
-          none: <></>,
-        })}
-        {this.props.counts.match({
-          some: counts => this.badges(counts),
-          none: <></>,
-        })}
-        {this.props.admins.match({
-          some: admins => this.admins(admins),
-          none: <></>,
-        })}
+        {site.description && <h6>{site.description}</h6>}
+        {site.sidebar && this.siteSidebar()}
+        {this.props.counts && this.badges()}
+        {this.props.admins && this.admins()}
       </div>
     );
   }
 
   adminButtons() {
     return (
-      amAdmin() && (
-        <ul className="list-inline mb-1 text-muted font-weight-bold">
+      this.canAdmin && (
+        <ul class="list-inline mb-1 text-muted font-weight-bold">
           <li className="list-inline-item-action">
             <button
-              className="btn btn-link d-inline-block text-muted"
+              class="btn btn-link d-inline-block text-muted"
               onClick={linkEvent(this, this.handleEditClick)}
               aria-label={i18n.t("edit")}
               data-tippy-content={i18n.t("edit")}
@@ -130,18 +120,21 @@ export class SiteSidebar extends Component<SiteSidebarProps, SiteSidebarState> {
     );
   }
 
-  siteSidebar(sidebar: string) {
+  siteSidebar() {
     return (
-      <div className="md-div" dangerouslySetInnerHTML={mdToHtml(sidebar)} />
+      <div
+        className="md-div"
+        dangerouslySetInnerHTML={mdToHtml(this.props.site.sidebar)}
+      />
     );
   }
 
-  admins(admins: PersonViewSafe[]) {
+  admins() {
     return (
-      <ul className="mt-1 list-inline small mb-0">
-        <li className="list-inline-item">{i18n.t("admins")}:</li>
-        {admins.map(av => (
-          <li key={av.person.id} className="list-inline-item">
+      <ul class="mt-1 list-inline small mb-0">
+        <li class="list-inline-item">{i18n.t("admins")}:</li>
+        {this.props.admins?.map(av => (
+          <li class="list-inline-item">
             <PersonListing person={av.person} />
           </li>
         ))}
@@ -149,11 +142,11 @@ export class SiteSidebar extends Component<SiteSidebarProps, SiteSidebarState> {
     );
   }
 
-  badges(siteAggregates: SiteAggregates) {
-    let counts = siteAggregates;
-    let online = this.props.online.unwrapOr(1);
+  badges() {
+    let counts = this.props.counts;
+    let online = this.props.online;
     return (
-      <ul className="my-2 list-inline">
+      <ul class="my-2 list-inline">
         <li className="list-inline-item badge badge-secondary">
           {i18n.t("number_online", {
             count: online,
@@ -245,19 +238,32 @@ export class SiteSidebar extends Component<SiteSidebarProps, SiteSidebarState> {
     );
   }
 
+  get canAdmin(): boolean {
+    return (
+      UserService.Instance.myUserInfo &&
+      this.props.admins
+        .map(a => a.person.id)
+        .includes(UserService.Instance.myUserInfo.local_user_view.person.id)
+    );
+  }
+
   handleCollapseSidebar(i: SiteSidebar) {
-    i.setState({ collapsed: !i.state.collapsed });
+    i.state.collapsed = !i.state.collapsed;
+    i.setState(i.state);
   }
 
   handleEditClick(i: SiteSidebar) {
-    i.setState({ showEdit: true });
+    i.state.showEdit = true;
+    i.setState(i.state);
   }
 
   handleEditSite() {
-    this.setState({ showEdit: false });
+    this.state.showEdit = false;
+    this.setState(this.state);
   }
 
   handleEditCancel() {
-    this.setState({ showEdit: false });
+    this.state.showEdit = false;
+    this.setState(this.state);
   }
 }

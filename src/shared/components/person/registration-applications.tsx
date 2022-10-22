@@ -1,20 +1,18 @@
-import { None, Option, Some } from "@sniptt/monads";
 import { Component, linkEvent } from "inferno";
 import {
-  GetSiteResponse,
   ListRegistrationApplications,
   ListRegistrationApplicationsResponse,
   RegistrationApplicationResponse,
+  RegistrationApplicationView,
+  SiteView,
   UserOperation,
-  wsJsonToRes,
-  wsUserOp,
 } from "lemmy-js-client";
 import { Subscription } from "rxjs";
 import { i18n } from "../../i18next";
 import { InitialFetchRequest } from "../../interfaces";
 import { UserService, WebSocketService } from "../../services";
 import {
-  auth,
+  authField,
   fetchLimit,
   isBrowser,
   setIsoData,
@@ -22,7 +20,9 @@ import {
   toast,
   updateRegistrationApplicationRes,
   wsClient,
+  wsJsonToRes,
   wsSubscribe,
+  wsUserOp,
 } from "../../utils";
 import { HtmlTags } from "../common/html-tags";
 import { Spinner } from "../common/icon";
@@ -35,10 +35,10 @@ enum UnreadOrAll {
 }
 
 interface RegistrationApplicationsState {
-  listRegistrationApplicationsResponse: Option<ListRegistrationApplicationsResponse>;
-  siteRes: GetSiteResponse;
-  unreadOrAll: UnreadOrAll;
+  applications: RegistrationApplicationView[];
   page: number;
+  site_view: SiteView;
+  unreadOrAll: UnreadOrAll;
   loading: boolean;
 }
 
@@ -46,16 +46,13 @@ export class RegistrationApplications extends Component<
   any,
   RegistrationApplicationsState
 > {
-  private isoData = setIsoData(
-    this.context,
-    ListRegistrationApplicationsResponse
-  );
+  private isoData = setIsoData(this.context);
   private subscription: Subscription;
   private emptyState: RegistrationApplicationsState = {
-    listRegistrationApplicationsResponse: None,
-    siteRes: this.isoData.site_res,
     unreadOrAll: UnreadOrAll.Unread,
+    applications: [],
     page: 1,
+    site_view: this.isoData.site_res.site_view,
     loading: true,
   };
 
@@ -65,7 +62,7 @@ export class RegistrationApplications extends Component<
     this.state = this.emptyState;
     this.handlePageChange = this.handlePageChange.bind(this);
 
-    if (UserService.Instance.myUserInfo.isNone() && isBrowser()) {
+    if (!UserService.Instance.myUserInfo && isBrowser()) {
       toast(i18n.t("not_logged_in"), "danger");
       this.context.router.history.push(`/login`);
     }
@@ -75,13 +72,9 @@ export class RegistrationApplications extends Component<
 
     // Only fetch the data if coming from another route
     if (this.isoData.path == this.context.router.route.match.url) {
-      this.state = {
-        ...this.state,
-        listRegistrationApplicationsResponse: Some(
-          this.isoData.routeData[0] as ListRegistrationApplicationsResponse
-        ),
-        loading: false,
-      };
+      this.state.applications =
+        this.isoData.routeData[0].registration_applications || []; // TODO test
+      this.state.loading = false;
     } else {
       this.refetch();
     }
@@ -98,36 +91,28 @@ export class RegistrationApplications extends Component<
   }
 
   get documentTitle(): string {
-    return this.state.siteRes.site_view.match({
-      some: siteView =>
-        UserService.Instance.myUserInfo.match({
-          some: mui =>
-            `@${mui.local_user_view.person.name} ${i18n.t(
-              "registration_applications"
-            )} - ${siteView.site.name}`,
-          none: "",
-        }),
-      none: "",
-    });
+    return `@${
+      UserService.Instance.myUserInfo.local_user_view.person.name
+    } ${i18n.t("registration_applications")} - ${
+      this.state.site_view.site.name
+    }`;
   }
 
   render() {
     return (
-      <div className="container-lg">
+      <div class="container-lg">
         {this.state.loading ? (
           <h5>
             <Spinner large />
           </h5>
         ) : (
-          <div className="row">
-            <div className="col-12">
+          <div class="row">
+            <div class="col-12">
               <HtmlTags
                 title={this.documentTitle}
                 path={this.context.router.route.match.url}
-                description={None}
-                image={None}
               />
-              <h5 className="mb-2">{i18n.t("registration_applications")}</h5>
+              <h5 class="mb-2">{i18n.t("registration_applications")}</h5>
               {this.selects()}
               {this.applicationList()}
               <Paginator
@@ -143,7 +128,7 @@ export class RegistrationApplications extends Component<
 
   unreadOrAllRadios() {
     return (
-      <div className="btn-group btn-group-toggle flex-wrap mb-2">
+      <div class="btn-group btn-group-toggle flex-wrap mb-2">
         <label
           className={`btn btn-outline-secondary pointer
             ${this.state.unreadOrAll == UnreadOrAll.Unread && "active"}
@@ -177,32 +162,31 @@ export class RegistrationApplications extends Component<
   selects() {
     return (
       <div className="mb-2">
-        <span className="mr-3">{this.unreadOrAllRadios()}</span>
+        <span class="mr-3">{this.unreadOrAllRadios()}</span>
       </div>
     );
   }
 
   applicationList() {
-    return this.state.listRegistrationApplicationsResponse.match({
-      some: res => (
-        <div>
-          {res.registration_applications.map(ra => (
-            <>
-              <hr />
-              <RegistrationApplication
-                key={ra.registration_application.id}
-                application={ra}
-              />
-            </>
-          ))}
-        </div>
-      ),
-      none: <></>,
-    });
+    return (
+      <div>
+        {this.state.applications.map(ra => (
+          <>
+            <hr />
+            <RegistrationApplication
+              key={ra.registration_application.id}
+              application={ra}
+            />
+          </>
+        ))}
+      </div>
+    );
   }
 
   handleUnreadOrAllChange(i: RegistrationApplications, event: any) {
-    i.setState({ unreadOrAll: Number(event.target.value), page: 1 });
+    i.state.unreadOrAll = Number(event.target.value);
+    i.state.page = 1;
+    i.setState(i.state);
     i.refetch();
   }
 
@@ -214,12 +198,12 @@ export class RegistrationApplications extends Component<
   static fetchInitialData(req: InitialFetchRequest): Promise<any>[] {
     let promises: Promise<any>[] = [];
 
-    let form = new ListRegistrationApplications({
-      unread_only: Some(true),
-      page: Some(1),
-      limit: Some(fetchLimit),
-      auth: req.auth.unwrap(),
-    });
+    let form: ListRegistrationApplications = {
+      unread_only: true,
+      page: 1,
+      limit: fetchLimit,
+      auth: req.auth,
+    };
     promises.push(req.client.listRegistrationApplications(form));
 
     return promises;
@@ -227,12 +211,12 @@ export class RegistrationApplications extends Component<
 
   refetch() {
     let unread_only = this.state.unreadOrAll == UnreadOrAll.Unread;
-    let form = new ListRegistrationApplications({
-      unread_only: Some(unread_only),
-      page: Some(this.state.page),
-      limit: Some(fetchLimit),
-      auth: auth().unwrap(),
-    });
+    let form: ListRegistrationApplications = {
+      unread_only: unread_only,
+      page: this.state.page,
+      limit: fetchLimit,
+      auth: authField(),
+    };
     WebSocketService.Instance.send(wsClient.listRegistrationApplications(form));
   }
 
@@ -245,25 +229,16 @@ export class RegistrationApplications extends Component<
     } else if (msg.reconnect) {
       this.refetch();
     } else if (op == UserOperation.ListRegistrationApplications) {
-      let data = wsJsonToRes<ListRegistrationApplicationsResponse>(
-        msg,
-        ListRegistrationApplicationsResponse
-      );
-      this.setState({
-        listRegistrationApplicationsResponse: Some(data),
-        loading: false,
-      });
+      let data = wsJsonToRes<ListRegistrationApplicationsResponse>(msg).data;
+      this.state.applications = data.registration_applications;
+      this.state.loading = false;
       window.scrollTo(0, 0);
+      this.setState(this.state);
     } else if (op == UserOperation.ApproveRegistrationApplication) {
-      let data = wsJsonToRes<RegistrationApplicationResponse>(
-        msg,
-        RegistrationApplicationResponse
-      );
+      let data = wsJsonToRes<RegistrationApplicationResponse>(msg).data;
       updateRegistrationApplicationRes(
         data.registration_application,
-        this.state.listRegistrationApplicationsResponse
-          .map(r => r.registration_applications)
-          .unwrapOr([])
+        this.state.applications
       );
       let uacs = UserService.Instance.unreadApplicationCountSub;
       // Minor bug, where if the application switches from deny to approve, the count will still go down

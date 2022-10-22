@@ -1,12 +1,9 @@
-import { None } from "@sniptt/monads/build";
 import { Component } from "inferno";
 import {
-  GetSiteResponse,
+  SiteView,
   UserOperation,
   VerifyEmail as VerifyEmailForm,
   VerifyEmailResponse,
-  wsJsonToRes,
-  wsUserOp,
 } from "lemmy-js-client";
 import { Subscription } from "rxjs";
 import { i18n } from "../../i18next";
@@ -16,13 +13,15 @@ import {
   setIsoData,
   toast,
   wsClient,
+  wsJsonToRes,
   wsSubscribe,
+  wsUserOp,
 } from "../../utils";
 import { HtmlTags } from "../common/html-tags";
 
 interface State {
   verifyEmailForm: VerifyEmailForm;
-  siteRes: GetSiteResponse;
+  site_view: SiteView;
 }
 
 export class VerifyEmail extends Component<any, State> {
@@ -30,10 +29,10 @@ export class VerifyEmail extends Component<any, State> {
   private subscription: Subscription;
 
   emptyState: State = {
-    verifyEmailForm: new VerifyEmailForm({
+    verifyEmailForm: {
       token: this.props.match.params.token,
-    }),
-    siteRes: this.isoData.site_res,
+    },
+    site_view: this.isoData.site_res.site_view,
   };
 
   constructor(props: any, context: any) {
@@ -58,24 +57,20 @@ export class VerifyEmail extends Component<any, State> {
   }
 
   get documentTitle(): string {
-    return this.state.siteRes.site_view.match({
-      some: siteView => `${i18n.t("verify_email")} - ${siteView.site.name}`,
-      none: "",
-    });
+    return `${i18n.t("verify_email")} - ${this.state.site_view.site.name}`;
   }
 
   render() {
     return (
-      <div className="container-lg">
+      <div class="container-lg">
         <HtmlTags
           title={this.documentTitle}
           path={this.context.router.route.match.url}
-          description={None}
-          image={None}
         />
-        <div className="row">
-          <div className="col-12 col-lg-6 offset-lg-3 mb-4">
+        <div class="row">
+          <div class="col-12 col-lg-8 offset-lg-2 mb-4">
             <h5>{i18n.t("verify_email")}</h5>
+            <hr></hr>
           </div>
         </div>
       </div>
@@ -91,10 +86,11 @@ export class VerifyEmail extends Component<any, State> {
       this.props.history.push("/");
       return;
     } else if (op == UserOperation.VerifyEmail) {
-      let data = wsJsonToRes<VerifyEmailResponse>(msg, VerifyEmailResponse);
+      let data = wsJsonToRes<VerifyEmailResponse>(msg).data;
       if (data) {
         toast(i18n.t("email_verified"));
-        this.setState(this.emptyState);
+        this.state = this.emptyState;
+        this.setState(this.state);
         this.props.history.push("/login");
       }
     }

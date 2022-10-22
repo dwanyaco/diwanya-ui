@@ -1,6 +1,6 @@
 {
-  "name": "Lemmy",
-  "description": "A link aggregator for the fediverse",
+  "name": "ديوانية",
+  "description": "شبكة من المجتمعات تعتمد على اهتمامات الناس.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#222222",

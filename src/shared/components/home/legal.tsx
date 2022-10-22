@@ -1,4 +1,3 @@
-import { None } from "@sniptt/monads";
 import { Component } from "inferno";
 import { GetSiteResponse } from "lemmy-js-client";
 import { i18n } from "../../i18next";
@@ -26,26 +25,17 @@ export class Legal extends Component<any, LegalState> {
 
   render() {
     return (
-      <div className="container-lg">
+      <div class="container-lg">
         <HtmlTags
           title={this.documentTitle}
           path={this.context.router.route.match.url}
-          description={None}
-          image={None}
         />
-        {this.state.siteRes.site_view.match({
-          some: siteView =>
-            siteView.site.legal_information.match({
-              some: legal => (
-                <div
-                  className="md-div"
-                  dangerouslySetInnerHTML={mdToHtml(legal)}
-                />
-              ),
-              none: <></>,
-            }),
-          none: <></>,
-        })}
+        <div
+          className="md-div"
+          dangerouslySetInnerHTML={mdToHtml(
+            this.state.siteRes.site_view.site.legal_information
+          )}
+        />
       </div>
     );
   }

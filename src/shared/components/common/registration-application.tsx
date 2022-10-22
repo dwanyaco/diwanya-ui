@@ -1,4 +1,3 @@
-import { None, Option, Some } from "@sniptt/monads";
 import { Component, linkEvent } from "inferno";
 import { T } from "inferno-i18next-dess";
 import {
@@ -7,7 +6,7 @@ import {
 } from "lemmy-js-client";
 import { i18n } from "../../i18next";
 import { WebSocketService } from "../../services";
-import { auth, mdToHtml, wsClient } from "../../utils";
+import { authField, mdToHtml, wsClient } from "../../utils";
 import { PersonListing } from "../person/person-listing";
 import { MarkdownTextArea } from "./markdown-textarea";
 import { MomentTime } from "./moment-time";
@@ -17,7 +16,7 @@ interface RegistrationApplicationProps {
 }
 
 interface RegistrationApplicationState {
-  denyReason: Option<string>;
+  denyReason?: string;
   denyExpanded: boolean;
 }
 
@@ -48,65 +47,51 @@ export class RegistrationApplication extends Component<
           {i18n.t("applicant")}: <PersonListing person={a.creator} />
         </div>
         <div>
-          {i18n.t("created")}:{" "}
-          <MomentTime showAgo published={ra.published} updated={None} />
+          {i18n.t("created")}: <MomentTime showAgo data={ra} />
         </div>
         <div>{i18n.t("answer")}:</div>
         <div className="md-div" dangerouslySetInnerHTML={mdToHtml(ra.answer)} />
 
-        {a.admin.match({
-          some: admin => (
-            <div>
-              {accepted ? (
-                <T i18nKey="approved_by">
+        {a.admin && (
+          <div>
+            {accepted ? (
+              <T i18nKey="approved_by">
+                #
+                <PersonListing person={a.admin} />
+              </T>
+            ) : (
+              <div>
+                <T i18nKey="denied_by">
                   #
-                  <PersonListing person={admin} />
+                  <PersonListing person={a.admin} />
                 </T>
-              ) : (
                 <div>
-                  <T i18nKey="denied_by">
-                    #
-                    <PersonListing person={admin} />
-                  </T>
-                  {ra.deny_reason.match({
-                    some: deny_reason => (
-                      <div>
-                        {i18n.t("deny_reason")}:{" "}
-                        <div
-                          className="md-div d-inline-flex"
-                          dangerouslySetInnerHTML={mdToHtml(deny_reason)}
-                        />
-                      </div>
-                    ),
-                    none: <></>,
-                  })}
+                  {i18n.t("deny_reason")}:{" "}
+                  <div
+                    className="md-div d-inline-flex"
+                    dangerouslySetInnerHTML={mdToHtml(ra.deny_reason || "")}
+                  />
                 </div>
-              )}
-            </div>
-          ),
-          none: <></>,
-        })}
+              </div>
+            )}
+          </div>
+        )}
 
         {this.state.denyExpanded && (
-          <div className="form-group row">
-            <label className="col-sm-2 col-form-label">
+          <div class="form-group row">
+            <label class="col-sm-2 col-form-label">
               {i18n.t("deny_reason")}
             </label>
-            <div className="col-sm-10">
+            <div class="col-sm-10">
               <MarkdownTextArea
                 initialContent={this.state.denyReason}
-                initialLanguageId={None}
                 onContentChange={this.handleDenyReasonChange}
-                placeholder={None}
-                buttonTitle={None}
-                maxLength={None}
                 hideNavigationWarnings
-                allLanguages={[]}
               />
             </div>
           </div>
         )}
-        {(ra.admin_id.isNone() || (ra.admin_id.isSome() && !accepted)) && (
+        {(!ra.admin_id || (ra.admin_id && !accepted)) && (
           <button
             className="btn btn-secondary mr-2 my-2"
             onClick={linkEvent(this, this.handleApprove)}
@@ -115,7 +100,7 @@ export class RegistrationApplication extends Component<
             {i18n.t("approve")}
           </button>
         )}
-        {(ra.admin_id.isNone() || (ra.admin_id.isSome() && accepted)) && (
+        {(!ra.admin_id || (ra.admin_id && accepted)) && (
           <button
             className="btn btn-secondary mr-2"
             onClick={linkEvent(this, this.handleDeny)}
@@ -130,12 +115,12 @@ export class RegistrationApplication extends Component<
 
   handleApprove(i: RegistrationApplication) {
     i.setState({ denyExpanded: false });
-    let form = new ApproveRegistrationApplication({
+    let form: ApproveRegistrationApplication = {
       id: i.props.application.registration_application.id,
-      deny_reason: None,
+      deny_reason: "",
       approve: true,
-      auth: auth().unwrap(),
-    });
+      auth: authField(),
+    };
     WebSocketService.Instance.send(
       wsClient.approveRegistrationApplication(form)
     );
@@ -144,12 +129,12 @@ export class RegistrationApplication extends Component<
   handleDeny(i: RegistrationApplication) {
     if (i.state.denyExpanded) {
       i.setState({ denyExpanded: false });
-      let form = new ApproveRegistrationApplication({
+      let form: ApproveRegistrationApplication = {
         id: i.props.application.registration_application.id,
         approve: false,
         deny_reason: i.state.denyReason,
-        auth: auth().unwrap(),
-      });
+        auth: authField(),
+      };
       WebSocketService.Instance.send(
         wsClient.approveRegistrationApplication(form)
       );
@@ -159,6 +144,7 @@ export class RegistrationApplication extends Component<
   }
 
   handleDenyReasonChange(val: string) {
-    this.setState({ denyReason: Some(val) });
+    this.state.denyReason = val;
+    this.setState(this.state);
   }
 }

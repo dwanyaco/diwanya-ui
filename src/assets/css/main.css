@@ -163,7 +163,7 @@
 }
 
 blockquote {
-  border-left: 2px solid var(--secondary);
+  border-right: 2px solid var(--secondary);
   margin: 0.5em 5px;
   padding: 0.1em 5px;
 }
@@ -250,8 +250,9 @@ hr {
   width: 1.5em;
   background: rgba(0, 0, 0, 0.4);
   background-color: rgba(0, 0, 0, 0.4);
-  border-bottom-left-radius: 0.25rem !important;
+  border-radius: 25rem !important;
   border-top-right-radius: 0.25rem !important;
+  color: #dee2e6!important;
 }
 
 .link-overlay:hover {
@@ -292,7 +293,7 @@ hr {
 }
 
 .list-inline-item-action:not(:last-child) {
-  margin-right: 1.2rem;
+  margin-left: 1.2rem;
 }
 
 pre {
@@ -373,10 +374,6 @@ br.big {
 
 .slight-radius {
   border-radius: 4px;
-}
-
-.modlog-choices-font-size {
-  font-size: .9375rem !important;
 }
 
 .preview-lines {

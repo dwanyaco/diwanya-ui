@@ -33,7 +33,7 @@ export class CommunityLink extends Component<CommunityLinkProps, any> {
       link = !this.props.realLink ? `/c/${name_}` : community.actor_id;
     }
 
-    let apubName = `!${name_}`;
+    let apubName = `#${name_}`;
     let displayName = this.props.useApubName ? apubName : title;
     return !this.props.realLink ? (
       <Link
@@ -56,15 +56,13 @@ export class CommunityLink extends Component<CommunityLinkProps, any> {
   }
 
   avatarAndName(displayName: string) {
+    let community = this.props.community;
     return (
       <>
-        {!this.props.hideAvatar &&
-          showAvatars() &&
-          this.props.community.icon.match({
-            some: icon => <PictrsImage src={icon} icon />,
-            none: <></>,
-          })}
-        <span className="overflow-wrap-anywhere">{displayName}</span>
+        {!this.props.hideAvatar && community.icon && showAvatars() && (
+          <PictrsImage src={community.icon} icon />
+        )}
+        <span class="overflow-wrap-anywhere">{displayName}</span>
       </>
     );
   }

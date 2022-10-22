@@ -1,14 +1,12 @@
-import { None, Some } from "@sniptt/monads/build";
 import { Component } from "inferno";
 import {
   CommentView,
   GetPersonDetailsResponse,
-  Language,
   PersonViewSafe,
   PostView,
   SortType,
 } from "lemmy-js-client";
-import { CommentViewType, PersonDetailsView } from "../../interfaces";
+import { PersonDetailsView } from "../../interfaces";
 import { commentsToFlatNodes, setupTippy } from "../../utils";
 import { CommentNodes } from "../comment/comment-nodes";
 import { Paginator } from "../common/paginator";
@@ -17,7 +15,6 @@ import { PostListing } from "../post/post-listing";
 interface PersonDetailsProps {
   personRes: GetPersonDetailsResponse;
   admins: PersonViewSafe[];
-  allLanguages: Language[];
   page: number;
   limit: number;
   sort: SortType;
@@ -91,17 +88,13 @@ export class PersonDetails extends Component<PersonDetailsProps, any> {
         return (
           <CommentNodes
             key={i.id}
-            nodes={[{ comment_view: c, children: [], depth: 0 }]}
-            viewType={CommentViewType.Flat}
-            admins={Some(this.props.admins)}
-            moderators={None}
-            maxCommentsShown={None}
+            nodes={[{ comment_view: c }]}
+            admins={this.props.admins}
             noBorder
             noIndent
             showCommunity
             showContext
             enableDownvotes={this.props.enableDownvotes}
-            allLanguages={this.props.allLanguages}
           />
         );
       }
@@ -111,13 +104,10 @@ export class PersonDetails extends Component<PersonDetailsProps, any> {
           <PostListing
             key={i.id}
             post_view={p}
-            admins={Some(this.props.admins)}
-            duplicates={None}
-            moderators={None}
+            admins={this.props.admins}
             showCommunity
             enableDownvotes={this.props.enableDownvotes}
             enableNsfw={this.props.enableNsfw}
-            allLanguages={this.props.allLanguages}
           />
         );
       }
@@ -154,10 +144,7 @@ export class PersonDetails extends Component<PersonDetailsProps, any> {
 
     return (
       <div>
-        {combined.map(i => [
-          this.renderItemType(i),
-          <hr key={i.type_} className="my-3" />,
-        ])}
+        {combined.map(i => [this.renderItemType(i), <hr class="my-3" />])}
       </div>
     );
   }
@@ -167,15 +154,11 @@ export class PersonDetails extends Component<PersonDetailsProps, any> {
       <div>
         <CommentNodes
           nodes={commentsToFlatNodes(this.props.personRes.comments)}
-          viewType={CommentViewType.Flat}
-          admins={Some(this.props.admins)}
-          moderators={None}
-          maxCommentsShown={None}
+          admins={this.props.admins}
           noIndent
           showCommunity
           showContext
           enableDownvotes={this.props.enableDownvotes}
-          allLanguages={this.props.allLanguages}
         />
       </div>
     );
@@ -188,15 +171,12 @@ export class PersonDetails extends Component<PersonDetailsProps, any> {
           <>
             <PostListing
               post_view={post}
-              admins={Some(this.props.admins)}
+              admins={this.props.admins}
               showCommunity
-              duplicates={None}
-              moderators={None}
               enableDownvotes={this.props.enableDownvotes}
               enableNsfw={this.props.enableNsfw}
-              allLanguages={this.props.allLanguages}
             />
-            <hr className="my-3" />
+            <hr class="my-3" />
           </>
         ))}
       </div>

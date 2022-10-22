@@ -1,9 +1,10 @@
-import { Either, Option } from "@sniptt/monads";
-import { GetSiteResponse, LemmyHttp } from "lemmy-js-client";
+import {
+  CommentView,
+  GetSiteResponse,
+  LemmyHttp,
+  PersonMentionView,
+} from "lemmy-js-client";
 
-/**
- * This contains serialized data, it needs to be deserialized before use.
- */
 export interface IsoData {
   path: string;
   routeData: any[];
@@ -22,21 +23,35 @@ declare global {
 }
 
 export interface InitialFetchRequest {
-  auth: Option<string>;
-  client: LemmyHttp;
+  auth: string;
   path: string;
+  client: LemmyHttp;
+}
+
+export interface CommentNode {
+  comment_view: CommentView | PersonMentionView;
+  children?: CommentNode[];
+  depth?: number;
 }
 
 export interface PostFormParams {
-  name: Option<string>;
-  url: Option<string>;
-  body: Option<string>;
-  nameOrId: Option<Either<string, number>>;
+  name: string;
+  url?: string;
+  body?: string;
+  community_name?: string;
+  community_id?: number;
+}
+
+export enum CommentSortType {
+  Hot,
+  Top,
+  New,
+  Old,
 }
 
 export enum CommentViewType {
   Tree,
-  Flat,
+  Chat,
 }
 
 export enum DataType {
@@ -54,11 +69,4 @@ export enum PersonDetailsView {
   Comments,
   Posts,
   Saved,
-}
-
-export enum PurgeType {
-  Person,
-  Community,
-  Post,
-  Comment,
 }

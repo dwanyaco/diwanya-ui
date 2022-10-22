@@ -40,13 +40,17 @@ export class ListingTypeSelect extends Component<
 
   render() {
     return (
-      <div className="btn-group btn-group-toggle flex-wrap mb-2">
+      <div class="btn-group btn-group-toggle flex-wrap mb-2">
         {this.props.showSubscribed && (
           <label
             title={i18n.t("subscribed_description")}
             className={`btn btn-outline-secondary 
             ${this.state.type_ == ListingType.Subscribed && "active"}
-            ${UserService.Instance.myUserInfo.isNone() ? "disabled" : "pointer"}
+            ${
+              UserService.Instance.myUserInfo == undefined
+                ? "disabled"
+                : "pointer"
+            }
           `}
           >
             <input
@@ -55,7 +59,7 @@ export class ListingTypeSelect extends Component<
               value={ListingType.Subscribed}
               checked={this.state.type_ == ListingType.Subscribed}
               onChange={linkEvent(this, this.handleTypeChange)}
-              disabled={UserService.Instance.myUserInfo.isNone()}
+              disabled={UserService.Instance.myUserInfo == undefined}
             />
             {i18n.t("subscribed")}
           </label>

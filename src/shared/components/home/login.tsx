@@ -1,24 +1,25 @@
-import { None } from "@sniptt/monads";
 import { Component, linkEvent } from "inferno";
 import {
   GetSiteResponse,
   Login as LoginForm,
   LoginResponse,
   PasswordReset,
+  SiteView,
   UserOperation,
-  wsJsonToRes,
-  wsUserOp,
 } from "lemmy-js-client";
 import { Subscription } from "rxjs";
 import { i18n } from "../../i18next";
 import { UserService, WebSocketService } from "../../services";
 import {
+  authField,
   isBrowser,
   setIsoData,
   toast,
   validEmail,
   wsClient,
+  wsJsonToRes,
   wsSubscribe,
+  wsUserOp,
 } from "../../utils";
 import { HtmlTags } from "../common/html-tags";
 import { Spinner } from "../common/icon";
@@ -26,7 +27,7 @@ import { Spinner } from "../common/icon";
 interface State {
   loginForm: LoginForm;
   loginLoading: boolean;
-  siteRes: GetSiteResponse;
+  site_view: SiteView;
 }
 
 export class Login extends Component<any, State> {
@@ -34,12 +35,12 @@ export class Login extends Component<any, State> {
   private subscription: Subscription;
 
   emptyState: State = {
-    loginForm: new LoginForm({
+    loginForm: {
       username_or_email: undefined,
       password: undefined,
-    }),
+    },
     loginLoading: false,
-    siteRes: this.isoData.site_res,
+    site_view: this.isoData.site_res.site_view,
   };
 
   constructor(props: any, context: any) {
@@ -57,7 +58,7 @@ export class Login extends Component<any, State> {
 
   componentDidMount() {
     // Navigate to home if already logged in
-    if (UserService.Instance.myUserInfo.isSome()) {
+    if (UserService.Instance.myUserInfo) {
       this.context.router.history.push("/");
     }
   }
@@ -69,10 +70,7 @@ export class Login extends Component<any, State> {
   }
 
   get documentTitle(): string {
-    return this.state.siteRes.site_view.match({
-      some: siteView => `${i18n.t("login")} - ${siteView.site.name}`,
-      none: "",
-    });
+    return `${i18n.t("login")} - ${this.state.site_view.site.name}`;
   }
 
   get isLemmyMl(): boolean {
@@ -81,15 +79,13 @@ export class Login extends Component<any, State> {
 
   render() {
     return (
-      <div className="container-lg">
+      <div class="container-lg">
         <HtmlTags
           title={this.documentTitle}
           path={this.context.router.route.match.url}
-          description={None}
-          image={None}
         />
-        <div className="row">
-          <div className="col-12 col-lg-6 offset-lg-3">{this.loginForm()}</div>
+        <div class="row">
+          <div class="col-12 col-lg-8 offset-lg-2">{this.loginForm()}</div>
         </div>
       </div>
     );
@@ -100,17 +96,18 @@ export class Login extends Component<any, State> {
       <div>
         <form onSubmit={linkEvent(this, this.handleLoginSubmit)}>
           <h5>{i18n.t("login")}</h5>
-          <div className="form-group row">
+          <hr></hr>
+          <div class="form-group row">
             <label
-              className="col-sm-2 col-form-label"
+              class="col-sm-4 col-form-label"
               htmlFor="login-email-or-username"
             >
               {i18n.t("email_or_username")}
             </label>
-            <div className="col-sm-10">
+            <div class="col-sm-8">
               <input
                 type="text"
-                className="form-control"
+                class="form-control"
                 id="login-email-or-username"
                 value={this.state.loginForm.username_or_email}
                 onInput={linkEvent(this, this.handleLoginUsernameChange)}
@@ -120,17 +117,17 @@ export class Login extends Component<any, State> {
               />
             </div>
           </div>
-          <div className="form-group row">
-            <label className="col-sm-2 col-form-label" htmlFor="login-password">
+          <div class="form-group row">
+            <label class="col-sm-4 col-form-label" htmlFor="login-password">
               {i18n.t("password")}
             </label>
-            <div className="col-sm-10">
+            <div class="col-sm-8">
               <input
                 type="password"
                 id="login-password"
                 value={this.state.loginForm.password}
                 onInput={linkEvent(this, this.handleLoginPasswordChange)}
-                className="form-control"
+                class="form-control"
                 autoComplete="current-password"
                 required
                 maxLength={60}
@@ -146,9 +143,9 @@ export class Login extends Component<any, State> {
               </button>
             </div>
           </div>
-          <div className="form-group row">
-            <div className="col-sm-10">
-              <button type="submit" className="btn btn-secondary">
+          <div class="form-group row">
+            <div class="col-sm-10">
+              <button type="submit" class="btn btn-secondary">
                 {this.state.loginLoading ? <Spinner /> : i18n.t("login")}
               </button>
             </div>
@@ -160,7 +157,8 @@ export class Login extends Component<any, State> {
 
   handleLoginSubmit(i: Login, event: any) {
     event.preventDefault();
-    i.setState({ loginLoading: true });
+    i.state.loginLoading = true;
+    i.setState(i.state);
     WebSocketService.Instance.send(wsClient.login(i.state.loginForm));
   }
 
@@ -176,9 +174,9 @@ export class Login extends Component<any, State> {
 
   handlePasswordReset(i: Login, event: any) {
     event.preventDefault();
-    let resetForm = new PasswordReset({
+    let resetForm: PasswordReset = {
       email: i.state.loginForm.username_or_email,
-    });
+    };
     WebSocketService.Instance.send(wsClient.passwordReset(resetForm));
   }
 
@@ -187,18 +185,28 @@ export class Login extends Component<any, State> {
     console.log(msg);
     if (msg.error) {
       toast(i18n.t(msg.error), "danger");
-      this.setState(this.emptyState);
+      this.state = this.emptyState;
+      this.setState(this.state);
       return;
     } else {
       if (op == UserOperation.Login) {
-        let data = wsJsonToRes<LoginResponse>(msg, LoginResponse);
-        this.setState(this.emptyState);
+        let data = wsJsonToRes<LoginResponse>(msg).data;
+        this.state = this.emptyState;
+        this.setState(this.state);
         UserService.Instance.login(data);
+        WebSocketService.Instance.send(
+          wsClient.userJoin({
+            auth: authField(),
+          })
+        );
+        toast(i18n.t("logged_in"));
+        this.props.history.push("/");
       } else if (op == UserOperation.PasswordReset) {
         toast(i18n.t("reset_password_mail_sent"));
       } else if (op == UserOperation.GetSite) {
-        let data = wsJsonToRes<GetSiteResponse>(msg, GetSiteResponse);
-        this.setState({ siteRes: data });
+        let data = wsJsonToRes<GetSiteResponse>(msg).data;
+        this.state.site_view = data.site_view;
+        this.setState(this.state);
       }
     }
   }

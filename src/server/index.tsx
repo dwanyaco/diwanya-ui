@@ -1,5 +1,3 @@
-import { None, Option } from "@sniptt/monads";
-import { serialize as serializeO } from "class-transformer";
 import express from "express";
 import fs from "fs";
 import { IncomingHttpHeaders } from "http";
@@ -7,20 +5,20 @@ import { Helmet } from "inferno-helmet";
 import { matchPath, StaticRouter } from "inferno-router";
 import { renderToString } from "inferno-server";
 import IsomorphicCookie from "isomorphic-cookie";
-import { GetSite, GetSiteResponse, LemmyHttp, toOption } from "lemmy-js-client";
+import { GetSite, GetSiteResponse, LemmyHttp } from "lemmy-js-client";
 import path from "path";
 import process from "process";
 import serialize from "serialize-javascript";
 import { App } from "../shared/components/app/app";
 import { SYMBOLS } from "../shared/components/common/symbols";
-import { httpBaseInternal } from "../shared/env";
+import { httpBaseInternal, wsUriBase } from "../shared/env";
 import {
   ILemmyConfig,
   InitialFetchRequest,
   IsoData,
 } from "../shared/interfaces";
 import { routes } from "../shared/routes";
-import { initializeSite } from "../shared/utils";
+import { initializeSite, setOptionalAuth } from "../shared/utils";
 
 const server = express();
 const [hostname, port] = process.env["LEMMY_UI_HOST"]
@@ -29,11 +27,11 @@ const [hostname, port] = process.env["LEMMY_UI_HOST"]
 const extraThemesFolder =
   process.env["LEMMY_UI_EXTRA_THEMES_FOLDER"] || "./extra_themes";
 
-if (!process.env["LEMMY_UI_DISABLE_CSP"] && !process.env["LEMMY_UI_DEBUG"]) {
+if (!process.env["LEMMY_UI_DEBUG"]) {
   server.use(function (_req, res, next) {
     res.setHeader(
       "Content-Security-Policy",
-      `default-src 'none'; connect-src *; img-src * data:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; form-action 'self'; base-uri 'self'; frame-src *`
+      `default-src 'none'; connect-src 'self' ${wsUriBase} https://plausible.io; img-src * data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://plausible.io; style-src 'self' 'unsafe-inline'; form-action 'self'; base-uri 'self'`
     );
     next();
   });
@@ -80,22 +78,8 @@ server.get("/css/themes/:name", async (req, res) => {
 
 function buildThemeList(): string[] {
   let themes = [
-    "litera",
-    "materia",
-    "minty",
-    "solar",
-    "united",
-    "cyborg",
-    "darkly",
-    "darkly-red",
-    "journal",
-    "sketchy",
-    "vaporwave",
-    "vaporwave-dark",
-    "i386",
-    "litely",
-    "litely-red",
-    "nord",
+    "dark",
+    "light"
   ];
   if (fs.existsSync(extraThemesFolder)) {
     let dirThemes = fs.readdirSync(extraThemesFolder);
@@ -117,9 +101,10 @@ server.get("/*", async (req, res) => {
   try {
     const activeRoute = routes.find(route => matchPath(req.path, route)) || {};
     const context = {} as any;
-    let auth: Option<string> = toOption(IsomorphicCookie.load("jwt", req));
+    let auth: string = IsomorphicCookie.load("jwt", req);
 
-    let getSiteForm = new GetSite({ auth });
+    let getSiteForm: GetSite = {};
+    setOptionalAuth(getSiteForm, auth);
 
     let promises: Promise<any>[] = [];
 
@@ -139,11 +124,14 @@ server.get("/*", async (req, res) => {
       console.error(
         "Incorrect JWT token, skipping auth so frontend can remove jwt cookie"
       );
-      getSiteForm.auth = None;
-      initialFetchReq.auth = None;
+      delete getSiteForm.auth;
+      delete initialFetchReq.auth;
       try_site = await initialFetchReq.client.getSite(getSiteForm);
     }
     let site: GetSiteResponse = try_site;
+    if (req.path !== "/setup" && !site.site_view) {
+      return res.redirect("/setup");
+    }
     initializeSite(site);
 
     if (activeRoute.fetchInitialData) {
@@ -171,7 +159,7 @@ server.get("/*", async (req, res) => {
 
     const wrapper = (
       <StaticRouter location={req.url} context={isoData}>
-        <App />
+        <App siteRes={isoData.site_res} />
       </StaticRouter>
     );
     if (context.url) {
@@ -189,13 +177,13 @@ server.get("/*", async (req, res) => {
     const symbols = renderToString(SYMBOLS);
     const helmet = Helmet.renderStatic();
 
-    const config: ILemmyConfig = { wsHost: process.env.LEMMY_UI_LEMMY_WS_HOST };
+    const config: ILemmyConfig = { wsHost: process.env.LEMMY_WS_HOST };
 
     res.send(`
            <!DOCTYPE html>
-           <html ${helmet.htmlAttributes.toString()} lang="en">
+           <html ${helmet.htmlAttributes.toString()} lang="ar">
            <head>
-           <script>window.isoData = ${serializeO(isoData)}</script>
+           <script>window.isoData = ${serialize(isoData)}</script>
            <script>window.lemmyConfig = ${serialize(config)}</script>
 
            <!-- A remote debugging utility for mobile -->
@@ -208,7 +196,7 @@ server.get("/*", async (req, res) => {
            ${helmet.meta.toString()}
 
            <!-- Required meta tags -->
-           <meta name="Description" content="Lemmy">
+           <meta name="Description" content="شبكة من المجتمعات تعتمد على اهتمامات الناس.">
            <meta charset="utf-8">
            <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
@@ -235,6 +223,7 @@ server.get("/*", async (req, res) => {
 
              <div id='root'>${root}</div>
              <script defer src='/static/js/client.js'></script>
+             <script defer data-domain="dwanya.co" src="https://plausible.io/js/plausible.js"></script>
            </body>
          </html>
 `);
